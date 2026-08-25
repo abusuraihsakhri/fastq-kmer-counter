@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  fastq-kmer-counter:
+    build: .
+    container_name: fastq-kmer-counter
+    ports:
+      - "8000:8000"
+    environment:
+      - AUDIT_SECRET_KEY=fastq-kmer-counter-prod-audit-key-2026
+      - MODEL_PROVIDER=mock
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
