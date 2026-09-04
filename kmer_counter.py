@@ -10,9 +10,35 @@ Zero external dependencies — Python stdlib only.
 
 import csv
 import math
+import os
 import sys
 from collections import Counter
+from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
+
+# Maximum file size (100 MB) to prevent resource exhaustion
+MAX_FILE_SIZE = 100 * 1024 * 1024
+
+
+def _safe_resolve_path(filepath: str) -> Path:
+    """Resolve and validate a file path, preventing path traversal."""
+    p = Path(filepath).resolve()
+    # Ensure path is within current working directory or an absolute allowed path
+    cwd = Path.cwd().resolve()
+    try:
+        p.relative_to(cwd)
+    except ValueError:
+        # Allow paths under common temp directories for testing
+        import tempfile
+        temp_dir = Path(tempfile.gettempdir()).resolve()
+        try:
+            p.relative_to(temp_dir)
+        except ValueError:
+            raise ValueError(
+                f"Path '{filepath}' is outside the allowed directory. "
+                f"Paths must be within the project directory or system temp."
+            )
+    return p
 
 
 # ---------------------------------------------------------------------------
@@ -51,7 +77,11 @@ def parse_fastq(text: str) -> List[Dict[str, str]]:
 
 def parse_fastq_file(filepath: str) -> List[Dict[str, str]]:
     """Parse a FASTQ file from disk."""
-    with open(filepath, 'r') as f:
+    safe_path = _safe_resolve_path(filepath)
+    file_size = safe_path.stat().st_size
+    if file_size > MAX_FILE_SIZE:
+        raise ValueError(f"File too large ({file_size} bytes). Maximum allowed: {MAX_FILE_SIZE} bytes.")
+    with open(safe_path, 'r', encoding='utf-8') as f:
         return parse_fastq(f.read())
 
 
@@ -69,8 +99,10 @@ def count_kmers(sequences: List[str], k: int) -> Dict[str, int]:
     Returns:
         Dict mapping k-mer string to count.
     """
-    if k <= 0:
+    if not isinstance(k, int) or k <= 0:
         return {}
+    if k > 100:
+        raise ValueError(f"k value {k} exceeds maximum allowed (100).")
 
     counts = Counter()
     for seq in sequences:
@@ -369,6 +401,10 @@ def analyze_fastq(records: List[Dict[str, str]], k_values: List[int] = None,
     """
     if k_values is None:
         k_values = [1, 2, 3]
+    # Validate k_values
+    k_values = [k for k in k_values if isinstance(k, int) and 0 < k <= 100]
+    if not k_values:
+        k_values = [1, 2, 3]
 
     sequences = [r['sequence'] for r in records]
 
@@ -414,7 +450,10 @@ def process_batch(input_csv: str, output_csv: str,
 
     Expected CSV columns: sequence (required).
     """
-    with open(input_csv, mode='r', encoding='utf-8-sig') as f:
+    safe_input = _safe_resolve_path(input_csv)
+    safe_output = _safe_resolve_path(output_csv)
+
+    with open(safe_input, mode='r', encoding='utf-8-sig') as f:
         reader = csv.DictReader(f)
         fieldnames = list(reader.fieldnames or [])
         rows = list(reader)
@@ -447,7 +486,7 @@ def process_batch(input_csv: str, output_csv: str,
         row_dict['num_unique_kmers'] = len(counts)
         out_rows.append(row_dict)
 
-    with open(output_csv, mode='w', encoding='utf-8', newline='') as f:
+    with open(safe_output, mode='w', encoding='utf-8', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=out_fields)
         writer.writeheader()
         writer.writerows(out_rows)

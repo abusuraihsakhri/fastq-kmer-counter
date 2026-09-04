@@ -3,12 +3,15 @@
 CLI for FASTQ K-mer Counter.
 
 Subcommands:
-  count     — Count k-mers in sequences
-  quality   — Quality score statistics
-  entropy   — Shannon entropy of k-mer distribution
-  complexity — Sequence complexity estimation
-  analyze   — Full FASTQ analysis
-  batch     — Batch process from CSV
+  count       — Count k-mers in sequences
+  quality     — Quality score statistics
+  entropy     — Shannon entropy of k-mer distribution
+  complexity  — Sequence complexity estimation
+  analyze     — Full FASTQ analysis
+  batch       — Batch process from CSV
+  audit       — Dispatch task payload across specialized workers
+  chat        — Air-gapped supervisory conversational assistant
+  verify-audit — Verify HMAC audit trail integrity
 """
 import argparse
 import json
@@ -126,6 +129,44 @@ def cmd_batch(args):
     print(f"Processed {len(results)} sequences -> {args.output}")
 
 
+def cmd_audit(args):
+    """Dispatch task payload across specialized workers."""
+    from agents.supervisor import SystemSupervisor
+    from agents.models import SystemTaskPayload
+    supervisor = SystemSupervisor(model_provider="mock")
+    payload = SystemTaskPayload(
+        task_id=args.task_id,
+        target_identifier=args.target_identifier,
+        primary_metric=args.primary_metric,
+        secondary_metric=args.secondary_metric,
+        status_descriptor=args.status_descriptor,
+        is_critical_flag=args.is_critical_flag,
+    )
+    dossier = supervisor.process_task(payload)
+    print(json.dumps(dossier.to_dict(), indent=2, default=str))
+    return 0
+
+
+def cmd_chat(args):
+    """Air-gapped supervisory conversational assistant."""
+    from agents.supervisor import SystemSupervisor
+    supervisor = SystemSupervisor(model_provider="mock")
+    query = " ".join(args.query)
+    response = supervisor.query_supervisory_chat(query)
+    print(json.dumps({"response": response}, indent=2))
+    return 0
+
+
+def cmd_verify_audit(args):
+    """Verify HMAC audit trail integrity."""
+    from agents.base import AuditLogger
+    verified = AuditLogger.verify_integrity()
+    trail_len = len(AuditLogger.get_trail())
+    result = {"audit_verified": verified, "trail_length": trail_len}
+    print(json.dumps(result, indent=2))
+    return 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(
         prog='fastq-kmer-counter',
@@ -172,8 +213,27 @@ def main(argv=None):
     p_batch.add_argument('-k', type=int, default=3, help='K-mer size')
     p_batch.set_defaults(func=cmd_batch)
 
+    # audit
+    p_audit = subparsers.add_parser('audit', help='Dispatch task payload across specialized workers')
+    p_audit.add_argument('--task-id', required=True, help='Unique task identifier')
+    p_audit.add_argument('--target-identifier', default='GENERIC-TARGET', help='Target identifier')
+    p_audit.add_argument('--primary-metric', type=float, default=10.0, help='Primary measurement')
+    p_audit.add_argument('--secondary-metric', type=float, default=0.0, help='Secondary metric')
+    p_audit.add_argument('--status-descriptor', default='NOMINAL', help='Status descriptor')
+    p_audit.add_argument('--is-critical-flag', action='store_true', help='Critical escalation flag')
+    p_audit.set_defaults(func=cmd_audit)
+
+    # chat
+    p_chat = subparsers.add_parser('chat', help='Air-gapped supervisory conversational assistant')
+    p_chat.add_argument('query', nargs='+', help='Query text')
+    p_chat.set_defaults(func=cmd_chat)
+
+    # verify-audit
+    p_verify = subparsers.add_parser('verify-audit', help='Verify HMAC audit trail integrity')
+    p_verify.set_defaults(func=cmd_verify_audit)
+
     args = parser.parse_args(argv)
-    args.func(args)
+    return args.func(args)
 
 
 if __name__ == '__main__':

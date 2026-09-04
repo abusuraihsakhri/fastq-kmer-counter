@@ -3,6 +3,7 @@
 import pytest
 from kmer_counter import (
     parse_fastq,
+    parse_fastq_file,
     count_kmers,
     count_kmers_single,
     kmer_frequency_spectrum,
@@ -274,6 +275,63 @@ class TestBatchProcessing:
         assert len(results) == 2
         assert csv_out.exists()
         assert 'entropy_k3' in results[0]
+
+
+# ---------------------------------------------------------------------------
+# Security & Validation Tests
+# ---------------------------------------------------------------------------
+
+class TestInputValidation:
+    def test_k_zero_returns_empty(self):
+        counts = count_kmers_single('ATCG', 0)
+        assert len(counts) == 0
+
+    def test_k_negative_returns_empty(self):
+        counts = count_kmers_single('ATCG', -1)
+        assert len(counts) == 0
+
+    def test_k_too_large_raises(self):
+        with pytest.raises(ValueError):
+            count_kmers_single('ATCG', 101)
+
+    def test_k_non_integer_returns_empty(self):
+        counts = count_kmers_single('ATCG', 2.5)
+        assert len(counts) == 0
+
+
+class TestPathTraversalProtection:
+    def test_safe_path_within_cwd(self, tmp_path):
+        test_file = tmp_path / "test.fastq"
+        test_file.write_text("@r1\nATCG\n+\nIIII\n", encoding='utf-8')
+        records = parse_fastq_file(str(test_file))
+        assert len(records) == 1
+
+    def test_path_traversal_blocked(self):
+        with pytest.raises(ValueError, match="outside the allowed directory"):
+            parse_fastq_file("../../../etc/passwd")
+
+
+class TestCLICommands:
+    def test_audit_command(self, capsys):
+        from cli import main
+        result = main(["audit", "--task-id", "TEST-001", "--primary-metric", "10.0"])
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "TEST-001" in captured.out
+
+    def test_chat_command(self, capsys):
+        from cli import main
+        result = main(["chat", "Explain", "k-mers"])
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "response" in captured.out
+
+    def test_verify_audit_command(self, capsys):
+        from cli import main
+        result = main(["verify-audit"])
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "audit_verified" in captured.out
 
 
 if __name__ == '__main__':
