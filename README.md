@@ -6,7 +6,7 @@ A FASTQ sequence-analysis utility with a dependency-free Python core and a light
 
 Open `web/index.html` directly in a modern browser, or serve the repository's `web/` directory with any static web server. Paste four-line FASTQ records or select a local FASTQ file, choose k (1–20), then select **Analyze FASTQ**. The interface reports read/base counts, valid and distinct k-mers, Phred+33 summary quality, Shannon entropy, normalized entropy, and a k-mer frequency spectrum. Export all k-mer counts as CSV.
 
-**Privacy:** Browser analysis runs entirely on the device. The application has no telemetry, uploads, external scripts or server-side processing. A local file is read only after selection. The browser implementation is JavaScript, not Python/Pyodide. It follows the core Python counting rules for forward-strand overlapping k-mers, excluding any windows containing ambiguous bases. Maximum browser input is 8 MiB; for larger files, use the Python CLI (which currently reads input into memory).
+**Privacy:** Browser analysis runs entirely on the device. The application has no telemetry, uploads, external scripts or server-side processing. A local file is read only after selection. The browser implementation is JavaScript, not Python/Pyodide. It follows the core Python counting rules for forward-strand overlapping k-mers, excluding any windows containing ambiguous bases. Maximum browser input is 8 MiB or 200,000 distinct k-mers; for larger files, use the Python CLI (which currently reads input into memory).
 
 GitHub Pages publication is automated by `.github/workflows/pages.yml` once GitHub Pages is configured to deploy from GitHub Actions. A live URL is not listed until deployment can be verified.
 
