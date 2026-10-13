@@ -32,3 +32,30 @@ jobs:
           path: _site
       - id: deploy
         uses: actions/deploy-pages@v4
+      - name: Verify live HTML and application script
+        env:
+          SITE_URL: ${{ steps.deploy.outputs.page_url }}
+        run: |
+          python - <<'PY'
+          import os
+          import time
+          from urllib.request import urlopen
+
+          base = os.environ["SITE_URL"].rstrip("/") + "/"
+          for attempt in range(12):
+              try:
+                  with urlopen(base, timeout=15) as response:
+                      html = response.read().decode("utf-8")
+                  with urlopen(base + "app.js", timeout=15) as response:
+                      javascript = response.read().decode("utf-8")
+                  assert "FASTQ K-mer Counter" in html
+                  assert 'src="./app.js"' in html
+                  assert "FASTQCounter" in javascript
+                  print("Verified published app and JavaScript:", base)
+                  break
+              except Exception as error:
+                  if attempt == 11:
+                      raise
+                  print(f"Pages not yet ready: {error}")
+                  time.sleep(5)
+          PY
