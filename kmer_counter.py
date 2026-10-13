@@ -12,6 +12,7 @@ import csv
 import math
 import os
 import sys
+import re
 from collections import Counter
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
@@ -46,32 +47,36 @@ def _safe_resolve_path(filepath: str) -> Path:
 # ---------------------------------------------------------------------------
 
 def parse_fastq(text: str) -> List[Dict[str, str]]:
-    """Parse FASTQ format text into list of {header, sequence, quality} dicts.
+    """Parse strict, four-line FASTQ records; reject malformed input.
 
-    FASTQ format: 4 lines per record:
-        Line 1: @header
-        Line 2: sequence
-        Line 3: + (optional repeated header)
-        Line 4: quality string (Phred+33 encoded)
+    Accepts IUPAC nucleotide ambiguity codes. A quality character must be
+    printable Phred-encoded ASCII and quality length must equal read length.
     """
+    if not text.strip():
+        return []
+    lines = text.splitlines()
+    if len(lines) % 4:
+        raise ValueError("Incomplete FASTQ record: expected four lines per read.")
+
     records = []
-    lines = [l.strip() for l in text.strip().split('\n') if l.strip()]
-
-    i = 0
-    while i + 3 < len(lines):
-        header = lines[i]
-        sequence = lines[i + 1]
-        plus = lines[i + 2]
-        quality = lines[i + 3]
-
-        if header.startswith('@') and (plus == '+' or plus.startswith('+')):
-            records.append({
-                'header': header[1:],  # Remove @
-                'sequence': sequence.upper(),
-                'quality': quality,
-            })
-        i += 4
-
+    for i in range(0, len(lines), 4):
+        header, sequence, plus, quality = (line.rstrip("\r") for line in lines[i:i + 4])
+        record_number = i // 4 + 1
+        if not header.startswith("@") or len(header) == 1:
+            raise ValueError(f"FASTQ record {record_number}: expected an @header.")
+        if not plus.startswith("+") or (len(plus) > 1 and plus[1:] != header[1:]):
+            raise ValueError(f"FASTQ record {record_number}: invalid + separator.")
+        if not sequence or not re.fullmatch(r"[ACGTRYSWKMBDHVN]+", sequence, re.IGNORECASE):
+            raise ValueError(f"FASTQ record {record_number}: invalid nucleotide sequence.")
+        if len(sequence) != len(quality):
+            raise ValueError(f"FASTQ record {record_number}: quality length differs from sequence length.")
+        if any(not 33 <= ord(c) <= 126 for c in quality):
+            raise ValueError(f"FASTQ record {record_number}: invalid quality encoding.")
+        records.append({
+            "header": header[1:],
+            "sequence": sequence.upper(),
+            "quality": quality,
+        })
     return records
 
 
@@ -109,7 +114,7 @@ def count_kmers(sequences: List[str], k: int) -> Dict[str, int]:
         seq = seq.upper()
         for i in range(len(seq) - k + 1):
             kmer = seq[i:i + k]
-            if 'N' not in kmer:  # Skip k-mers with ambiguous bases
+            if all(base in 'ACGT' for base in kmer):  # Exclude all IUPAC ambiguity codes
                 counts[kmer] += 1
 
     return dict(counts)
@@ -450,22 +455,31 @@ def process_batch(input_csv: str, output_csv: str,
 
     Expected CSV columns: sequence (required).
     """
+    if isinstance(k, bool) or not isinstance(k, int) or not 1 <= k <= 100:
+        raise ValueError("k must be an integer between 1 and 100.")
     safe_input = _safe_resolve_path(input_csv)
     safe_output = _safe_resolve_path(output_csv)
+    if safe_input == safe_output:
+        raise ValueError("Input and output CSV paths must differ.")
+    if safe_input.stat().st_size > MAX_FILE_SIZE:
+        raise ValueError("Input CSV exceeds the 100 MiB limit.")
 
-    with open(safe_input, mode='r', encoding='utf-8-sig') as f:
+    with open(safe_input, mode='r', encoding='utf-8-sig', newline='') as f:
         reader = csv.DictReader(f)
         fieldnames = list(reader.fieldnames or [])
+        if not any(column in fieldnames for column in ('sequence', 'seq')):
+            raise ValueError("CSV must contain a 'sequence' or 'seq' column.")
         rows = list(reader)
 
-    out_fields = fieldnames + ['length', 'gc_content', f'entropy_k{k}',
-                                'complexity', 'num_unique_kmers']
+    out_fields = list(dict.fromkeys(fieldnames + [
+        'length', 'gc_content', f'entropy_k{k}', 'complexity', 'num_unique_kmers'
+    ]))
     out_rows = []
 
     for r in rows:
-        seq = r.get('sequence', r.get('seq', ''))
+        seq = (r.get('sequence') or r.get('seq') or '').strip()
         if not seq:
-            out_rows.append(dict(r))
+            out_rows.append({**r, **{key: '' for key in out_fields if key not in fieldnames}})
             continue
 
         seq = seq.upper()
