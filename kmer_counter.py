@@ -479,7 +479,7 @@ def process_batch(input_csv: str, output_csv: str,
     for r in rows:
         seq = (r.get('sequence') or r.get('seq') or '').strip()
         if not seq:
-            out_rows.append({**r, **{key: '' for key in out_fields if key not in fieldnames}})
+            out_rows.append({**r, **{key: '' for key in ('length', 'gc_content', f'entropy_k{k}', 'complexity', 'num_unique_kmers')}})
             continue
 
         seq = seq.upper()
