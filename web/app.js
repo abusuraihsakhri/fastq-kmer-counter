@@ -3,6 +3,7 @@
 /* Lightweight browser implementation of the core Python FASTQ/k-mer workflow. */
 const FASTQCounter = (() => {
   const MAX_BYTES = 8 * 1024 * 1024;
+  const MAX_UNIQUE_KMERS = 200000;
 
   function parseFastq(text) {
     if (typeof text !== "string" || !text.trim()) {
@@ -54,6 +55,9 @@ const FASTQCounter = (() => {
         const word = seq.slice(j, j + k);
         totalWindows++;
         if (!/^[ACGT]+$/.test(word)) continue;
+        if (!counts.has(word) && counts.size >= MAX_UNIQUE_KMERS) {
+          throw new Error("Too many distinct k-mers for a browser session; use the Python CLI.");
+        }
         counts.set(word, (counts.get(word) || 0) + 1);
       }
     }
@@ -118,6 +122,7 @@ const FASTQCounter = (() => {
       spectrum.append(item);
     }
     document.getElementById("results").hidden = false;
+    document.getElementById("placeholder").hidden = true;
     document.getElementById("download").disabled = false;
     document.getElementById("notes").textContent =
       result.skippedWindows.toLocaleString() + " windows with ambiguous bases excluded. " +
@@ -137,6 +142,7 @@ const FASTQCounter = (() => {
       status.className = "";
       status.textContent = "Analyzing reads…";
       document.getElementById("results").hidden = true;
+      document.getElementById("placeholder").hidden = false;
       document.getElementById("download").disabled = true;
       try {
         const file = upload.files && upload.files[0];
