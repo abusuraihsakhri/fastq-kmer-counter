@@ -1,5 +1,7 @@
 # FASTQ K-mer Counter
 
+### [Open the Live Application →](https://abusuraihsakhri.github.io/fastq-kmer-counter/)
+
 A FASTQ sequence-analysis utility with a dependency-free Python core and a lightweight browser application. It counts overlapping DNA k-mers, summarizes sequencing quality, and estimates distribution entropy.
 
 ## Browser application
@@ -8,7 +10,7 @@ Open `web/index.html` directly in a modern browser, or serve the repository's `w
 
 **Privacy:** Browser analysis runs entirely on the device. The application has no telemetry, uploads, external scripts or server-side processing. A local file is read only after selection. The browser implementation is JavaScript, not Python/Pyodide. It follows the core Python counting rules for forward-strand overlapping k-mers, excluding any windows containing ambiguous bases. Maximum browser input is 8 MiB or 200,000 distinct k-mers; for larger files, use the Python CLI (which currently reads input into memory).
 
-GitHub Pages publication is automated by `.github/workflows/pages.yml` once GitHub Pages is configured to deploy from GitHub Actions. A live URL is not listed until deployment can be verified.
+GitHub Pages publication is automated by `.github/workflows/pages.yml`. The deployment workflow checks that the published HTML and JavaScript are reachable over HTTPS.
 
 ## Python CLI
 
