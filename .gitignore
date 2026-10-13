@@ -8,3 +8,12 @@ output.csv
 dist/
 build/
 tmp_test_out.csv
+
+# Local secrets and tooling
+.env
+.env.*
+!.env.example
+node_modules/
+.coverage
+.ruff_cache/
+.mypy_cache/
